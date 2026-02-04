@@ -1,0 +1,24 @@
+{
+    "name": "threejs-room-movement",
+    "version": "1.0.0",
+    "description": "Three.js room with WASD movement controls",
+    "main": "canvas.js",
+    "type": "module",
+    "scripts": {
+        "start": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+    },
+    "keywords": [
+        "threejs",
+        "webgl"
+    ],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "three": "^0.160.0"
+    },
+    "devDependencies": {
+        "vite": "^5.0.0"
+    }
+}
