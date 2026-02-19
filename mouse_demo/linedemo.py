@@ -4,8 +4,16 @@ from pyOpenHaptics.hd_device import HapticDevice
 import pyOpenHaptics.hd as hd
 import time
 import math
+import json
+import asyncio
+import threading
 from dataclasses import dataclass, field
 from pyOpenHaptics.hd_callback import hd_callback
+try:
+    import websockets
+except ImportError:
+    websockets = None
+    print("Warning: websockets not installed. Run: pip install websockets")
 
 # --- 1. Shared State ---
 @dataclass
@@ -56,26 +64,24 @@ class PhysicsEngine:
         self.k_drag = k_drag
         self.k_z = k_z
     
-    def calculate_guidance_force(self, dev_pos, target_x, target_y):
+    def calculate_guidance_force(self, dev_pos, target_x, target_y, target_z):
         """
-        Calculates a force that pulls the user towards the target position.
+        Calculates a force that pulls the user towards the target position in 3D.
         Updates the global device_state with the calculated force.
         """
         x, y, z = dev_pos[0], dev_pos[1], dev_pos[2]
         
-        # Drag the user towards the target position (X and Y axes)
+        # Drag the user towards the target position (all three axes)
         f_x = self.k_drag * (target_x - x)
         f_y = self.k_drag * (target_y - y)
-        
-        # Keep Z-axis centered
-        f_z = self.k_z * (0 - z)
+        f_z = self.k_drag * (target_z - z)  # Now follows target Z instead of centering
 
         # Update global state
         device_state.force = [f_x, f_y, f_z]
     
-    def update(self, dev_pos, mouse_x_screen, mouse_y_screen, width, height):
+    def update(self, dev_pos, mouse_x_screen, mouse_y_screen, target_z_mm, width, height):
         """
-        Updates physics based on current device position and mouse location.
+        Updates physics based on current device position, mouse location, and target Z.
         Returns target coordinates in mm.
         """
         scale = 3.0
@@ -83,9 +89,9 @@ class PhysicsEngine:
         target_x_mm = (mouse_x_screen - center_x) / scale
         target_y_mm = -(mouse_y_screen - center_y) / scale  # Invert Y for haptic coords
         
-        self.calculate_guidance_force(dev_pos, target_x_mm, target_y_mm)
+        self.calculate_guidance_force(dev_pos, target_x_mm, target_y_mm, target_z_mm)
         
-        return target_x_mm, target_y_mm
+        return target_x_mm, target_y_mm, target_z_mm
 
 # --- 4. Renderer Class ---
 class Renderer:
@@ -113,11 +119,12 @@ class Renderer:
         screen_y = self.center_y - (haptic_y * self.scale)  # Invert Y for screen
         return int(screen_x), int(screen_y)
     
-    def calculate_distance(self, target_x_mm, target_y_mm, dev_x, dev_y):
-        """Calculate Euclidean distance between target and cursor in mm."""
+    def calculate_distance(self, target_x_mm, target_y_mm, target_z_mm, dev_x, dev_y, dev_z):
+        """Calculate 3D Euclidean distance between target and cursor in mm."""
         dx = target_x_mm - dev_x
         dy = target_y_mm - dev_y
-        return math.sqrt(dx**2 + dy**2)
+        dz = target_z_mm - dev_z
+        return math.sqrt(dx**2 + dy**2 + dz**2)
     
     def draw_target(self, surface, mouse_x_screen, mouse_y_screen):
         """Draw the target cursor (blue circle at mouse position)."""
@@ -136,51 +143,129 @@ class Renderer:
             status_text = self.font_large.render("Status: DISABLED (Hold Button to feel force)", True, (255, 100, 100))
         surface.blit(status_text, (x, y))
     
-    def draw_coordinates(self, surface, target_x_mm, target_y_mm, dev_x, dev_y):
-        """Draw the coordinate viewport."""
-        target_text = self.font_small.render(f"Target:  X={target_x_mm:7.2f}  Y={target_y_mm:7.2f}", True, self.BLUE)
-        cursor_text = self.font_small.render(f"Cursor:  X={dev_x:7.2f}  Y={dev_y:7.2f}", True, self.RED)
+    def draw_coordinates(self, surface, target_x_mm, target_y_mm, target_z_mm, dev_x, dev_y, dev_z):
+        """Draw the coordinate viewport with 3D coordinates."""
+        target_text = self.font_small.render(f"Target:  X={target_x_mm:7.2f}  Y={target_y_mm:7.2f}  Z={target_z_mm:7.2f}", True, self.BLUE)
+        cursor_text = self.font_small.render(f"Cursor:  X={dev_x:7.2f}  Y={dev_y:7.2f}  Z={dev_z:7.2f}", True, self.RED)
         
-        surface.blit(target_text, (20, self.height - 60))
-        surface.blit(cursor_text, (20, self.height - 30))
+        surface.blit(target_text, (20, self.height - 90))
+        surface.blit(cursor_text, (20, self.height - 60))
     
-    def draw_distance(self, surface, mouse_x_screen, mouse_y_screen, dev_x, dev_y, target_x_mm, target_y_mm):
-        """Draw a line between cursor and target with distance label."""
+    def draw_distance(self, surface, mouse_x_screen, mouse_y_screen, dev_x, dev_y, dev_z, target_x_mm, target_y_mm, target_z_mm):
+        """Draw a line between cursor and target with 3D distance label."""
         screen_user_x, screen_user_y = self.screen_from_haptic(dev_x, dev_y)
         
         # Draw line connecting the two points
         pygame.draw.line(surface, self.GREEN, (screen_user_x, screen_user_y), (mouse_x_screen, mouse_y_screen), 2)
         
-        # Calculate and display distance
-        distance = self.calculate_distance(target_x_mm, target_y_mm, dev_x, dev_y)
+        # Calculate and display 3D distance
+        distance = self.calculate_distance(target_x_mm, target_y_mm, target_z_mm, dev_x, dev_y, dev_z)
         distance_text = self.font_small.render(f"Distance: {distance:7.2f} mm", True, self.GREEN)
         surface.blit(distance_text, (self.width - 280, 20))
     
-    def render(self, surface, device_state, dev_x, dev_y, mouse_x_screen, mouse_y_screen, target_x_mm, target_y_mm):
+    def draw_z_depth_indicator(self, surface, target_z_mm, dev_z):
+        """Draw a Z-depth indicator bar on the right side of the screen."""
+        bar_x = self.width - 60
+        bar_y = 100
+        bar_width = 40
+        bar_height = 300
+        z_range = 100  # ±50mm range
+        
+        # Draw bar background
+        pygame.draw.rect(surface, self.GRAY, (bar_x, bar_y, bar_width, bar_height), 2)
+        
+        # Draw center line (Z=0)
+        center_y = bar_y + bar_height // 2
+        pygame.draw.line(surface, self.WHITE, (bar_x, center_y), (bar_x + bar_width, center_y), 1)
+        
+        # Draw target Z position (blue)
+        target_z_pos = center_y - int((target_z_mm / z_range) * bar_height)
+        target_z_pos = max(bar_y, min(bar_y + bar_height, target_z_pos))
+        pygame.draw.circle(surface, self.BLUE, (bar_x + bar_width // 2, target_z_pos), 8)
+        
+        # Draw device Z position (red)
+        dev_z_pos = center_y - int((dev_z / z_range) * bar_height)
+        dev_z_pos = max(bar_y, min(bar_y + bar_height, dev_z_pos))
+        pygame.draw.circle(surface, self.RED, (bar_x + bar_width // 2, dev_z_pos), 6)
+        
+        # Labels
+        z_label = self.font_small.render("Z-Depth", True, self.WHITE)
+        surface.blit(z_label, (bar_x - 10, bar_y - 25))
+        scroll_hint = self.font_small.render("(Scroll)", True, self.GRAY)
+        surface.blit(scroll_hint, (bar_x - 5, bar_y + bar_height + 5))
+    
+    def render(self, surface, device_state, dev_x, dev_y, dev_z, mouse_x_screen, mouse_y_screen, target_x_mm, target_y_mm, target_z_mm):
         """Render all visual elements."""
         surface.fill(self.BLACK)
         
         self.draw_target(surface, mouse_x_screen, mouse_y_screen)
         self.draw_user(surface, dev_x, dev_y)
-        self.draw_distance(surface, mouse_x_screen, mouse_y_screen, dev_x, dev_y, target_x_mm, target_y_mm)
+        self.draw_distance(surface, mouse_x_screen, mouse_y_screen, dev_x, dev_y, dev_z, target_x_mm, target_y_mm, target_z_mm)
+        self.draw_z_depth_indicator(surface, target_z_mm, dev_z)
         self.draw_status(surface, device_state, 20, 20)
-        self.draw_coordinates(surface, target_x_mm, target_y_mm, dev_x, dev_y)
+        self.draw_coordinates(surface, target_x_mm, target_y_mm, target_z_mm, dev_x, dev_y, dev_z)
         
         pygame.display.flip()
 
-# --- 5. Main Visual Loop ---
+# --- 5. WebSocket Server ---
+websocket_clients = set()
+ws_loop = None
+
+async def websocket_handler(websocket):
+    """Handle WebSocket connections."""
+    websocket_clients.add(websocket)
+    print(f"WebSocket client connected. Total clients: {len(websocket_clients)}")
+    try:
+        await websocket.wait_closed()
+    finally:
+        websocket_clients.remove(websocket)
+        print(f"WebSocket client disconnected. Total clients: {len(websocket_clients)}")
+
+async def broadcast_position(data):
+    """Broadcast position data to all connected clients."""
+    if websocket_clients:
+        message = json.dumps(data)
+        await asyncio.gather(
+            *[client.send(message) for client in websocket_clients],
+            return_exceptions=True
+        )
+
+def start_websocket_server():
+    """Start WebSocket server in a separate thread."""
+    global ws_loop
+    if websockets is None:
+        print("WebSocket server disabled (websockets not installed)")
+        return None
+    
+    async def run_server():
+        async with websockets.serve(websocket_handler, "localhost", 8765):
+            print("WebSocket server started on ws://localhost:8765")
+            await asyncio.Future()  # Run forever
+    
+    def thread_target():
+        global ws_loop
+        ws_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(ws_loop)
+        ws_loop.run_until_complete(run_server())
+    
+    thread = threading.Thread(target=thread_target, daemon=True)
+    thread.start()
+    time.sleep(0.5)  # Give server time to start
+    return thread
+
+# --- 6. Main Visual Loop ---
 def main(k_drag=0.08, k_z=0.15):
     """
     Main application loop.
     
     Args:
         k_drag: Stiffness for XY plane guidance (default: 0.08)
-        k_z: Stiffness for Z-axis centering (default: 0.15)
+        k_z: Stiffness for Z-axis guidance (default: 0.15)
     """
     pygame.init()
     width, height = 800, 600
     surface = pygame.display.set_mode((width, height))
-    pygame.display.set_caption("Haptic Active Guidance Demo")
+    pygame.display.set_caption("Haptic Active Guidance Demo - 3D")
     
     clock = pygame.time.Clock()
 
@@ -192,6 +277,13 @@ def main(k_drag=0.08, k_z=0.15):
     # Initialize physics and renderer
     physics_engine = PhysicsEngine(k_drag=k_drag, k_z=k_z)
     renderer = Renderer(width, height)
+    
+    # Start WebSocket server
+    start_websocket_server()
+    
+    # Z-axis control
+    target_z_mm = 0.0
+    scroll_sensitivity = 5.0  # mm per scroll notch
 
     run = True
     while run:
@@ -204,21 +296,41 @@ def main(k_drag=0.08, k_z=0.15):
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     run = False
+            # Handle mouse wheel for Z-axis control
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 4:  # Scroll up
+                    target_z_mm += scroll_sensitivity
+                elif event.button == 5:  # Scroll down
+                    target_z_mm -= scroll_sensitivity
 
         # Get latest haptic data
         if not device_state.position:
             continue
             
-        dev_x, dev_y = device_state.position[0], device_state.position[1]
+        dev_x, dev_y, dev_z = device_state.position[0], device_state.position[1], device_state.position[2]
         
         # Get mouse position
         mouse_x_screen, mouse_y_screen = pygame.mouse.get_pos()
         
         # --- PHYSICS UPDATE ---
-        target_x_mm, target_y_mm = physics_engine.update(device_state.position, mouse_x_screen, mouse_y_screen, width, height)
+        target_x_mm, target_y_mm, target_z_mm = physics_engine.update(
+            device_state.position, mouse_x_screen, mouse_y_screen, target_z_mm, width, height
+        )
+
+        # --- BROADCAST TO WEBSOCKET ---
+        if websockets and websocket_clients and ws_loop:
+            position_data = {
+                "target": {"x": target_x_mm, "y": target_y_mm, "z": target_z_mm},
+                "device": {"x": dev_x, "y": dev_y, "z": dev_z}
+            }
+            asyncio.run_coroutine_threadsafe(broadcast_position(position_data), ws_loop)
+        elif websockets and not ws_loop:
+            print("Warning: WebSocket loop not initialized")
+        elif websockets and not websocket_clients:
+            pass  # No clients connected yet (normal when starting)
 
         # --- DRAWING ---
-        renderer.render(surface, device_state, dev_x, dev_y, mouse_x_screen, mouse_y_screen, target_x_mm, target_y_mm)
+        renderer.render(surface, device_state, dev_x, dev_y, dev_z, mouse_x_screen, mouse_y_screen, target_x_mm, target_y_mm, target_z_mm)
 
     device.close()
     pygame.quit()
