@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Experiment History</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="logo">Haptic Experiment System</h1>
+            <div class="nav-links">
+                <a href="/">New Experiment</a>
+                <a href="/history" class="active">History</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="history-screen">
+            <!-- Header -->
+            <div class="history-header card">
+                <h2>Experiment History</h2>
+                <div class="history-controls">
+                    <div class="filter-group">
+                        <label for="participant-filter">Filter by Participant:</label>
+                        <input type="text" id="participant-filter" placeholder="Enter participant ID">
+                        <button id="filter-btn" class="btn btn-secondary">Filter</button>
+                        <button id="clear-filter-btn" class="btn btn-secondary">Clear</button>
+                    </div>
+                    <button id="compare-btn" class="btn btn-primary" disabled>
+                        Compare Selected (<span id="selected-count">0</span>)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-state" class="card">
+                <div class="spinner"></div>
+                <p>Loading experiments...</p>
+            </div>
+
+            <!-- Experiments Table -->
+            <div id="experiments-table-container" class="card" style="display: none;">
+                <table class="experiments-table">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="select-all"></th>
+                            <th>ID</th>
+                            <th>Participant</th>
+                            <th>Date/Time</th>
+                            <th>Haptics</th>
+                            <th>Duration (s)</th>
+                            <th>Efficiency (%)</th>
+                            <th>Jitter (mm)</th>
+                            <th>Lateral Error (mm)</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="experiments-tbody">
+                        <!-- Rows populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="card" style="display: none;">
+                <div class="empty-state-icon">📊</div>
+                <h3>No Experiments Found</h3>
+                <p>Start your first experiment to see results here.</p>
+                <a href="/" class="btn btn-primary">Start New Experiment</a>
+            </div>
+
+            <!-- Comparison Section -->
+            <div id="comparison-section" style="display: none;">
+                <div class="card">
+                    <div class="comparison-header">
+                        <h3>Experiment Comparison</h3>
+                        <button id="close-comparison" class="btn btn-secondary">Close</button>
+                    </div>
+
+                    <!-- Comparison Chart -->
+                    <div class="comparison-chart-container">
+                        <img id="comparison-chart" src="" alt="Comparison Chart" class="visualization-img">
+                    </div>
+
+                    <!-- Comparison Table -->
+                    <div class="comparison-table-container">
+                        <table class="comparison-table">
+                            <thead>
+                                <tr>
+                                    <th>Metric</th>
+                                    <th class="comparison-exp" id="comp-exp-1">Exp 1</th>
+                                    <th class="comparison-exp" id="comp-exp-2">Exp 2</th>
+                                    <th class="comparison-exp" id="comp-exp-3">Exp 3</th>
+                                    <th class="comparison-exp" id="comp-exp-4">Exp 4</th>
+                                </tr>
+                            </thead>
+                            <tbody id="comparison-tbody">
+                                <!-- Rows populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="comparison-actions">
+                        <button id="export-comparison-pdf" class="btn btn-success">Export Comparison PDF</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='history.js') }}"></script>
+</body>
+
+</html>

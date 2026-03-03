@@ -11,6 +11,7 @@ import pyOpenHaptics.hd as hd
 import time
 import math
 import json
+import argparse
 from dataclasses import dataclass, field
 from pyOpenHaptics.hd_callback import hd_callback
 
@@ -53,11 +54,15 @@ class ExperimentData:
     duration: float = 0
     fps: float = 60
     ticks: list = field(default_factory=list)
+    participant_id: str = ""
+    haptic_enabled: bool = True
     
     def to_json(self):
         """Convert experiment data to JSON-serializable dictionary."""
         return {
             "metadata": {
+                "participant_id": self.participant_id,
+                "haptic_enabled": self.haptic_enabled,
                 "total_duration_seconds": self.duration,
                 "target_fps": self.fps,
                 "total_ticks": len(self.ticks),
@@ -368,7 +373,7 @@ class Renderer3D:
 class PolylineTracker3D:
     """Main class for running the 3D polyline tracking experiment."""
     
-    def __init__(self, fps=60, k_xy=0.06, k_z=0.15):
+    def __init__(self, fps=60, k_xy=0.06, k_z=0.15, participant_id="", haptic_enabled=True):
         """
         Initialize the polyline tracker.
         
@@ -376,11 +381,18 @@ class PolylineTracker3D:
             fps: Target frames per second
             k_xy: Stiffness for XY plane haptic guidance
             k_z: Stiffness for Z-axis haptic guidance
+            participant_id: Unique identifier for the participant
+            haptic_enabled: Whether to enable haptic guidance
         """
         self.fps = fps
         self.k_xy = k_xy
         self.k_z = k_z
-        self.experiment_data = ExperimentData(fps=fps)
+        self.haptic_enabled = haptic_enabled
+        self.experiment_data = ExperimentData(
+            fps=fps, 
+            participant_id=participant_id,
+            haptic_enabled=haptic_enabled
+        )
         self.tick_counter = 0
     
     def run_experiment(self):
@@ -392,9 +404,21 @@ class PolylineTracker3D:
         
         clock = pygame.time.Clock()
 
-        print("Initializing Haptic Device for 3D Polyline Tracking...")
-        device = HapticDevice(device_name="Default Device", callback=state_callback)
-        time.sleep(0.2)
+        # Initialize haptic device (if enabled)
+        device = None
+        if self.haptic_enabled:
+            print("Initializing Haptic Device for 3D Polyline Tracking...")
+            try:
+                device = HapticDevice(device_name="Default Device", callback=state_callback)
+                time.sleep(0.2)
+                print("Haptic device initialized successfully.")
+            except Exception as e:
+                print(f"Warning: Could not initialize haptic device: {e}")
+                print("Running in visual-only mode.")
+                self.haptic_enabled = False
+                self.experiment_data.haptic_enabled = False
+        else:
+            print("Running in visual-only mode (no haptics).")
         
         # Initialize components
         path = PolylinePath3D()
@@ -423,12 +447,22 @@ class PolylineTracker3D:
                     if event.key == pygame.K_ESCAPE:
                         run = False
 
-            # Get latest haptic data
-            if not device_state.position:
-                continue
-            
-            dev_pos = device_state.position
-            dev_x, dev_y, dev_z = dev_pos[0], dev_pos[1], dev_pos[2]
+            # Get latest haptic data (or use mouse position if no haptics)
+            if self.haptic_enabled:
+                if not device_state.position:
+                    continue
+                dev_pos = device_state.position
+                dev_x, dev_y, dev_z = dev_pos[0], dev_pos[1], dev_pos[2]
+            else:
+                # Use mouse position when haptics disabled (for testing)
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                # Convert screen to haptic coordinates
+                dev_x = (mouse_x - renderer.center_x) / renderer.scale
+                dev_y = -(mouse_y - renderer.center_y) / renderer.scale
+                dev_z = 0  # Mouse is 2D only
+                dev_pos = [dev_x, dev_y, dev_z]
+                device_state.position = dev_pos
+                device_state.button = pygame.mouse.get_pressed()[0]  # Left mouse button
             
             # Update path and get current target
             target_pos, distance, progress = path.update(dev_pos)
@@ -447,8 +481,11 @@ class PolylineTracker3D:
                 run = False
                 break
             
-            # Calculate and apply haptic guidance force
-            force = physics_engine.calculate_guidance_force(dev_pos, target_pos)
+            # Calculate and apply haptic guidance force (only if haptics enabled)
+            if self.haptic_enabled:
+                force = physics_engine.calculate_guidance_force(dev_pos, target_pos)
+            else:
+                force = [0, 0, 0]
             
             # Track data
             tick_data = {
@@ -499,7 +536,8 @@ class PolylineTracker3D:
         self.experiment_data.end_time = time.time()
         self.experiment_data.duration = self.experiment_data.end_time - self.experiment_data.start_time
         
-        device.close()
+        if device:
+            device.close()
         pygame.quit()
         
         print(f"Experiment completed in {self.experiment_data.duration:.2f}s")
@@ -514,7 +552,8 @@ class PolylineTracker3D:
         print(f"Experiment data saved to {filepath}")
 
 
-def run_polyline_experiment(k_xy=0.06, k_z=0.15, output_file="polyline_experiment_data.json"):
+def run_polyline_experiment(k_xy=0.06, k_z=0.15, output_file="polyline_experiment_data.json", 
+                           participant_id="", haptic_enabled=True):
     """
     Convenience function to run the 3D polyline experiment and save results.
     
@@ -522,14 +561,42 @@ def run_polyline_experiment(k_xy=0.06, k_z=0.15, output_file="polyline_experimen
         k_xy: Stiffness for XY plane haptic guidance
         k_z: Stiffness for Z-axis haptic guidance
         output_file: Path to save the JSON output
+        participant_id: Unique identifier for the participant
+        haptic_enabled: Whether to enable haptic guidance
     """
-    tracker = PolylineTracker3D(fps=60, k_xy=k_xy, k_z=k_z)
+    tracker = PolylineTracker3D(
+        fps=60, 
+        k_xy=k_xy, 
+        k_z=k_z, 
+        participant_id=participant_id,
+        haptic_enabled=haptic_enabled
+    )
     tracker.run_experiment()
     tracker.save_to_json(output_file)
     return tracker.experiment_data
 
 
 if __name__ == "__main__":
-    # Run the 3D polyline tracking experiment
-    # XY force reduced to 0.06, Z force increased to 0.15 for balanced perception
-    run_polyline_experiment(k_xy=0.06, k_z=0.15, output_file="polyline_experiment_data.json")
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='3D Polyline Haptic Tracking Experiment')
+    parser.add_argument('--participant-id', type=str, default='', 
+                       help='Participant ID (required for web GUI mode)')
+    parser.add_argument('--k-xy', type=float, default=0.06,
+                       help='XY plane haptic stiffness (default: 0.06)')
+    parser.add_argument('--k-z', type=float, default=0.15,
+                       help='Z-axis haptic stiffness (default: 0.15)')
+    parser.add_argument('--no-haptics', action='store_true',
+                       help='Disable haptic guidance (visual-only mode)')
+    parser.add_argument('--output-file', type=str, default='polyline_experiment_data.json',
+                       help='Output JSON file path')
+    
+    args = parser.parse_args()
+    
+    # Run experiment with parsed arguments
+    run_polyline_experiment(
+        k_xy=args.k_xy,
+        k_z=args.k_z,
+        output_file=args.output_file,
+        participant_id=args.participant_id,
+        haptic_enabled=not args.no_haptics
+    )

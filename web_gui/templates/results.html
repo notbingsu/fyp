@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Experiment Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="logo">Haptic Experiment System</h1>
+            <div class="nav-links">
+                <a href="/">New Experiment</a>
+                <a href="/history">History</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="results-screen">
+            <!-- Loading State -->
+            <div id="loading-state" class="card">
+                <div class="spinner"></div>
+                <p>Loading experiment results...</p>
+            </div>
+
+            <!-- Results Content -->
+            <div id="results-content" style="display: none;">
+                <!-- Header -->
+                <div class="results-header card">
+                    <h2>Experiment Results</h2>
+                    <div class="experiment-info">
+                        <span><strong>Experiment ID:</strong> <span id="exp-id">{{ experiment_id }}</span></span>
+                        <span><strong>Participant:</strong> <span id="participant-id">-</span></span>
+                        <span><strong>Date:</strong> <span id="exp-date">-</span></span>
+                        <span><strong>Haptics:</strong> <span id="haptics-status">-</span></span>
+                    </div>
+                </div>
+
+                <!-- Metrics Grid -->
+                <div class="metrics-grid">
+                    <div class="metric-card card-success">
+                        <div class="metric-icon">📊</div>
+                        <div class="metric-content">
+                            <h3 class="metric-title">Path Efficiency</h3>
+                            <p class="metric-value" id="path-efficiency">-</p>
+                            <p class="metric-unit">Percentage</p>
+                        </div>
+                    </div>
+
+                    <div class="metric-card card-info">
+                        <div class="metric-icon">⏱️</div>
+                        <div class="metric-content">
+                            <h3 class="metric-title">Task Duration</h3>
+                            <p class="metric-value" id="duration">-</p>
+                            <p class="metric-unit">Seconds</p>
+                        </div>
+                    </div>
+
+                    <div class="metric-card card-warning">
+                        <div class="metric-icon">〰️</div>
+                        <div class="metric-content">
+                            <h3 class="metric-title">RMS Jitter</h3>
+                            <p class="metric-value" id="jitter-rms">-</p>
+                            <p class="metric-unit">Millimeters</p>
+                        </div>
+                    </div>
+
+                    <div class="metric-card card-error">
+                        <div class="metric-icon">📏</div>
+                        <div class="metric-content">
+                            <h3 class="metric-title">Lateral Error</h3>
+                            <p class="metric-value" id="lateral-error">-</p>
+                            <p class="metric-unit">Millimeters (RMS)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detailed Metrics -->
+                <div class="card detailed-metrics">
+                    <h3>Detailed Metrics</h3>
+                    <table class="metrics-table">
+                        <tbody>
+                            <tr>
+                                <td><strong>Ideal Path Length</strong></td>
+                                <td id="ideal-path">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Actual Path Length</strong></td>
+                                <td id="actual-path">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Excess Path</strong></td>
+                                <td id="excess-path">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Jitter (Mean ± Std)</strong></td>
+                                <td id="jitter-stats">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Lateral Error (Mean ± Std)</strong></td>
+                                <td id="lateral-stats">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Visualizations -->
+                <div class="visualizations">
+                    <div class="card visualization-card">
+                        <h3>3D Trajectory Analysis</h3>
+                        <div class="viz-container">
+                            <img id="trajectory-viz" src="" alt="3D Trajectory" class="visualization-img">
+                        </div>
+                    </div>
+
+                    <div class="card visualization-card">
+                        <h3>Jitter Analysis</h3>
+                        <div class="viz-container">
+                            <img id="jitter-viz" src="" alt="Jitter Analysis" class="visualization-img">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <a href="/" class="btn btn-primary">New Experiment</a>
+                    <a href="/history" class="btn btn-secondary">View History</a>
+                    <button id="export-pdf" class="btn btn-success">Export PDF Report</button>
+                    <button id="export-csv" class="btn btn-info">Export CSV</button>
+                </div>
+            </div>
+
+            <!-- Error State -->
+            <div id="error-state" class="card error-message" style="display: none;">
+                <h3>❌ Error Loading Results</h3>
+                <p id="error-message">Failed to load experiment results.</p>
+                <a href="/" class="btn btn-primary">Return to Home</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const experimentId = "{{ experiment_id }}";
+    </script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='results.js') }}"></script>
+</body>
+
+</html>
