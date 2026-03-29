@@ -20,7 +20,7 @@ WAYPOINTS = discover_waypoint_sets(WAYPOINTS_DIR)
 def run_experiment(scenario, duration=30, fps=60, participant_id="test", haptic_enabled=True):
     if scenario not in WAYPOINTS:
         raise ValueError(f"Scenario '{scenario}' not found in waypoints directory '{WAYPOINTS_DIR}'.")
-    waypoints = WAYPOINTS[scenario]
+    waypoints = WAYPOINTS[scenario]  # Each is [joint_x, joint_y, joint_z]
     path = PolylinePath3D(waypoints)
     physics = PhysicsEngine3D()
     data = ExperimentData(fps=fps, participant_id=participant_id, haptic_enabled=haptic_enabled)

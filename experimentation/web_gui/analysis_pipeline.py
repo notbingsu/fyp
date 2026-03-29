@@ -37,7 +37,14 @@ def apply_butterworth_filter(positions: np.ndarray, timestamps: np.ndarray,
         print(f"Warning: Cutoff frequency {cutoff_hz} Hz is too high for sample rate {sample_rate} Hz")
         cutoff_normalized = 0.9
     
-    b, a = signal.butter(order, cutoff_normalized, btype='low', analog=False)
+    butter_result = signal.butter(order, cutoff_normalized, btype='low', analog=False)
+    # Handle both 2-tuple and 3-tuple return (for compatibility)
+    if isinstance(butter_result, tuple) and len(butter_result) == 2:
+        b, a = butter_result
+    elif isinstance(butter_result, tuple) and len(butter_result) == 3:
+        b, a, _ = butter_result  # Ignore third value if present
+    else:
+        raise ValueError("Unexpected output from signal.butter")
     
     # Apply filter to each axis
     filtered = np.zeros_like(positions)
@@ -70,14 +77,14 @@ def point_to_segment_distance(point: np.ndarray, seg_start: np.ndarray,
     segment_length_sq = np.dot(segment_vec, segment_vec)
     
     if segment_length_sq < 1e-10:
-        return np.linalg.norm(point_vec)
+               return float(np.linalg.norm(point_vec))
     
     # Project point onto line
     t = np.dot(point_vec, segment_vec) / segment_length_sq
     t = np.clip(t, 0, 1)
     
     closest_point = seg_start + t * segment_vec
-    return np.linalg.norm(point - closest_point)
+    return float(np.linalg.norm(point - closest_point))
 
 
 def compute_lateral_error_metrics(positions: np.ndarray, waypoints: np.ndarray) -> Dict:
