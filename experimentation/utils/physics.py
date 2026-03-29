@@ -5,7 +5,7 @@ import math
 
 class PolylinePath3D:
     """Defines a 3D polyline path with multiple waypoints."""
-    def __init__(self, waypoints, completion_threshold=8.0, endpoint_threshold=10.0):
+    def __init__(self, waypoints, completion_threshold=0.5, endpoint_threshold=1.0):
         self.waypoints = waypoints
         self.current_waypoint_index = 0
         self.completion_threshold = completion_threshold
@@ -30,7 +30,7 @@ class PolylinePath3D:
             target = self.get_current_target()
             distance = self.calculate_distance_3d(current_position, target)
         progress_ratio = self.current_waypoint_index / (len(self.waypoints) - 1)
-        return target, distance, progress_ratio
+        return target, distance, progress_ratio, self.current_waypoint_index
 
 class PhysicsEngine3D:
     """Handles physics calculations for 3D haptic guidance along polyline."""

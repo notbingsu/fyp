@@ -12,11 +12,13 @@ class ExperimentData:
     fps: float = 60
     ticks: list = field(default_factory=list)
     participant_id: str = ""
+    scenario: str = ""
     haptic_enabled: bool = True
     def to_json(self):
         return {
             "metadata": {
                 "participant_id": self.participant_id,
+                "scenario": self.scenario,
                 "haptic_enabled": self.haptic_enabled,
                 "total_duration_seconds": self.duration,
                 "target_fps": self.fps,
