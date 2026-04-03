@@ -67,6 +67,8 @@ def init_database():
                 total_duration REAL,
                 total_ticks INTEGER,
                 average_tick_rate REAL,
+                collisions INTEGER,
+                wasted_clicks INTEGER,
                 FOREIGN KEY (experiment_id) REFERENCES experiments (id)
             )
         ''')
@@ -82,6 +84,16 @@ def init_database():
         ]:
             try:
                 cursor.execute(f'ALTER TABLE experiments ADD COLUMN {col} {definition}')
+                conn.commit()
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+        for col, definition in [
+            ('collisions', 'INTEGER'),
+            ('wasted_clicks', 'INTEGER'),
+        ]:
+            try:
+                cursor.execute(f'ALTER TABLE metrics ADD COLUMN {col} {definition}')
                 conn.commit()
             except sqlite3.OperationalError:
                 pass  # Column already exists
