@@ -1,6 +1,7 @@
 """Automated analysis pipeline for experiment data processing."""
 import json
 import numpy as np
+import pandas as pd
 from scipy import signal
 from pathlib import Path
 import matplotlib
@@ -152,7 +153,109 @@ def extract_waypoints_from_data(data: Dict) -> np.ndarray:
     return np.array(waypoints)
 
 
-def analyze_experiment(json_path: str, output_dir: Path, 
+def load_csv_positions(csv_path: str) -> Tuple[np.ndarray, np.ndarray, float]:
+    """Load positions, timestamps, and actual path length from experiment CSV.
+
+    Returns (positions Nx3, timestamps N, actual_path_length_m).
+    """
+    df = pd.read_csv(csv_path)
+    timestamps = df['time_s'].values
+    positions = df[['pos_x', 'pos_y', 'pos_z']].values
+    actual_length = float(df['cumulative_dist_m'].iloc[-1])
+    return positions, timestamps, actual_length
+
+
+def load_reference_path(csv_path: str, max_points: int = 500) -> Tuple[np.ndarray, float]:
+    """Load and uniformly downsample a reference-path CSV for lateral error computation.
+
+    Returns (waypoints Mx3, ideal_path_length_m).
+    """
+    df = pd.read_csv(csv_path)
+    ideal_length = float(df['cumulative_dist_m'].iloc[-1])
+
+    n = len(df)
+    step = max(1, n // max_points)
+    indices = list(range(0, n, step))
+    if indices[-1] != n - 1:
+        indices.append(n - 1)
+
+    waypoints = df[['pos_x', 'pos_y', 'pos_z']].iloc[indices].values
+    return waypoints, ideal_length
+
+
+def analyze_experiment_csv(csv_path: str, reference_csv_path: str,
+                           output_dir: Path, cutoff_hz: float = 6.0) -> Dict:
+    """Complete analysis pipeline for a CSV-format experiment.
+
+    csv_path           – participant recording (pos_x/y/z, cumulative_dist_m, time_s)
+    reference_csv_path – ideal reference path in the same CSV format
+    output_dir         – directory for plots and filtered_data.json
+    """
+    positions, timestamps, actual_length = load_csv_positions(csv_path)
+    waypoints, ideal_length = load_reference_path(reference_csv_path)
+
+    filtered_positions = apply_butterworth_filter(positions, timestamps, cutoff_hz)
+
+    metrics: Dict = {}
+    metrics.update(compute_jitter_metrics(positions, filtered_positions))
+    metrics.update(compute_lateral_error_metrics(filtered_positions, waypoints))
+
+    efficiency = (ideal_length / actual_length * 100) if actual_length > 0 else 0.0
+    metrics['path_efficiency'] = float(efficiency)
+    metrics['ideal_path_length'] = float(ideal_length)
+    metrics['actual_path_length'] = float(actual_length)
+    metrics['excess_path_length'] = float(actual_length - ideal_length)
+    metrics['total_duration'] = float(timestamps[-1] - timestamps[0])
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # 3D trajectory plot
+    fig = plt.figure(figsize=(12, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(positions[:, 0], positions[:, 1], positions[:, 2],
+            'r-', alpha=0.3, linewidth=1, label='Original')
+    ax.plot(filtered_positions[:, 0], filtered_positions[:, 1], filtered_positions[:, 2],
+            'b-', linewidth=2, label='Filtered')
+    ax.plot(waypoints[:, 0], waypoints[:, 1], waypoints[:, 2],
+            'go-', markersize=3, linewidth=2, label='Reference Path')
+    ax.set_xlabel('X (m)')
+    ax.set_ylabel('Y (m)')
+    ax.set_zlabel('Z (m)')
+    ax.set_title('3D Trajectory Analysis')
+    ax.legend()
+    plt.savefig(output_dir / 'trajectory_3d.png', dpi=150, bbox_inches='tight')
+    plt.close()
+
+    # Jitter over time plot
+    jitter_values = np.linalg.norm(positions - filtered_positions, axis=1)
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(timestamps, jitter_values, 'b-', linewidth=1, alpha=0.7)
+    ax.axhline(y=metrics['jitter_rms'], color='r', linestyle='--',
+               label=f"RMS: {metrics['jitter_rms']:.4f} m")
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Jitter (m)')
+    ax.set_title('Residual Jitter Over Time')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.savefig(output_dir / 'jitter_analysis.png', dpi=150, bbox_inches='tight')
+    plt.close()
+
+    filtered_data = {
+        'metadata': {
+            'csv_path': str(csv_path),
+            'reference_csv_path': str(reference_csv_path),
+            'filter_cutoff_hz': cutoff_hz,
+            'filter_order': 4,
+        },
+        'metrics': metrics,
+    }
+    with open(output_dir / 'filtered_data.json', 'w') as f:
+        json.dump(filtered_data, f, indent=2)
+
+    return metrics
+
+
+def analyze_experiment(json_path: str, output_dir: Path,
                        cutoff_hz: float = 6.0) -> Dict:
     """
     Complete analysis pipeline for an experiment.

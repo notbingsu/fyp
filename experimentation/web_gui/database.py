@@ -33,6 +33,7 @@ def init_database():
                 participant_id TEXT NOT NULL,
                 scenario TEXT NOT NULL DEFAULT '',
                 timestamp TEXT NOT NULL,
+                recorded_at TEXT,
                 haptic_enabled INTEGER NOT NULL,
                 k_xy REAL NOT NULL,
                 k_z REAL NOT NULL,
@@ -73,12 +74,29 @@ def init_database():
         conn.commit()
 
         # Migrate existing DB: add columns if missing
-        for col, definition in [('run_id', 'TEXT'), ('scenario', "TEXT NOT NULL DEFAULT ''")]:
+        for col, definition in [
+            ('run_id', 'TEXT'),
+            ('scenario', "TEXT NOT NULL DEFAULT ''"),
+            ('condition', 'TEXT'),
+            ('recorded_at', 'TEXT'),
+        ]:
             try:
                 cursor.execute(f'ALTER TABLE experiments ADD COLUMN {col} {definition}')
                 conn.commit()
             except sqlite3.OperationalError:
                 pass  # Column already exists
+
+        # Back-fill recorded_at from timestamp for existing rows
+        cursor.execute('SELECT id, timestamp FROM experiments WHERE recorded_at IS NULL AND timestamp IS NOT NULL')
+        rows_to_update = cursor.fetchall()
+        for row in rows_to_update:
+            try:
+                dt = datetime.fromisoformat(row['timestamp'])
+                recorded_at = dt.strftime('%d %b %Y %H:%M:%S')
+                cursor.execute('UPDATE experiments SET recorded_at = ? WHERE id = ?', (recorded_at, row['id']))
+            except (ValueError, TypeError):
+                pass
+        conn.commit()
 
 
 def create_experiment(participant_id: str, scenario: str, haptic_enabled: bool,
@@ -86,14 +104,40 @@ def create_experiment(participant_id: str, scenario: str, haptic_enabled: bool,
     """Create a new experiment record and return its ID."""
     with get_db() as conn:
         cursor = conn.cursor()
-        timestamp = datetime.now().isoformat()
-        run_id = f"{participant_id}_{scenario}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        now = datetime.now()
+        timestamp = now.isoformat()
+        recorded_at = now.strftime('%d %b %Y %H:%M:%S')
+        run_id = f"{participant_id}_{scenario}_{now.strftime('%Y%m%d_%H%M%S')}"
 
         cursor.execute('''
             INSERT INTO experiments
-            (run_id, participant_id, scenario, timestamp, haptic_enabled, k_xy, k_z, created_at, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-        ''', (run_id, participant_id, scenario, timestamp, int(haptic_enabled), k_xy, k_z, timestamp))
+            (run_id, participant_id, scenario, timestamp, recorded_at, haptic_enabled, k_xy, k_z, created_at, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        ''', (run_id, participant_id, scenario, timestamp, recorded_at, int(haptic_enabled), k_xy, k_z, timestamp))
+
+        conn.commit()
+        return cursor.lastrowid
+
+
+def create_experiment_csv(participant_id: str, condition: str, scenario: str,
+                          raw_data_path: str, duration: float,
+                          timestamp: Optional[str] = None) -> int:
+    """Create an experiment record from a CSV file import and return its ID."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        ts = timestamp or datetime.now().isoformat()
+        run_id = f"{participant_id}_{condition}_{scenario}_{ts.replace(':', '-')}"
+        try:
+            recorded_at = datetime.fromisoformat(ts).strftime('%d %b %Y %H:%M:%S')
+        except (ValueError, TypeError):
+            recorded_at = ts
+
+        cursor.execute('''
+            INSERT INTO experiments
+            (run_id, participant_id, condition, scenario, timestamp, recorded_at, haptic_enabled,
+             k_xy, k_z, duration, status, raw_data_path, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 0, 0.0, 0.0, ?, 'completed', ?, ?)
+        ''', (run_id, participant_id, condition, scenario, ts, recorded_at, duration, raw_data_path, ts))
 
         conn.commit()
         return cursor.lastrowid

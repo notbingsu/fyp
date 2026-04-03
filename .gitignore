@@ -1,4 +1,7 @@
 .env
 .venv
 .vscode
+Results/
+analysis_output
 node_modules
+.db
