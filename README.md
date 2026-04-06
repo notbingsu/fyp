@@ -52,6 +52,18 @@ The web interface opens at http://localhost:5000. Enter a participant ID, config
 
 See [web_gui/README.md](web_gui/README.md) for full documentation.
 
+### Running the Unity game
+
+1. Unzip `FYP Game v03.zip`
+2. Run `Surgery Haptic Training.exe` inside the extracted folder
+3. Connect the Phantom Omni before launching — the game will detect it automatically
+
+Run data is written to two locations as the game progresses:
+- **`data/results/<participant_id>/`** — raw movement CSVs, one file per session
+- **`experiment/waypoints/`** — waypoint completion records for each trial
+
+The web GUI (`web_gui/run_server.py`) can then be used to analyse and review the collected data.
+
 ### Running the experiment directly (no web GUI)
 
 ```bash
