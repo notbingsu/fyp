@@ -1,61 +1,88 @@
-# Project Overview
+# CDE4301 Final Year Project — Haptic Guidance Research
 
-This repository contains three focused efforts:
+Research project investigating haptic guidance for 3D polyline tracking tasks using the Phantom Omni device.
 
-**mouse_demo** demonstrates interaction physics between two users on the Phantom Omni. It captures paired input and response behavior to study how forces and motion interact across users in a shared haptic task.
+## Repository Structure
 
-**opengl_movement** simulates movement in a 3D environment model with navigation implemented using Three.js. It includes a controllable cursor, third-person camera, and basic scene setup for testing navigation dynamics.
+```
+fyp/
+├── experiment/          # Experiment setup and execution
+│   ├── experiment_runner.py   # Main experiment runner (Pygame + haptics)
+│   ├── design.md              # Experimental design documentation
+│   ├── utils/                 # Shared utilities (device, physics, waypoints)
+│   ├── waypoints/             # Path definition CSVs (Training, Test1, Test2)
+│   └── unity/                 # Unity C# integration scripts
+│
+├── web_gui/             # Flask web interface for running and reviewing experiments
+│   ├── run_server.py          # Start here
+│   ├── app.py                 # REST API endpoints
+│   ├── database.py            # SQLite experiment storage
+│   ├── analysis_pipeline.py   # Butterworth filtering, metrics, visualizations
+│   ├── analysis_output/       # Per-session generated outputs (gitignored, P001/Test1 sample kept)
+│   └── README.md              # Detailed web GUI documentation
+│
+├── data/                # Collected experiment data
+│   ├── results/               # Raw per-participant CSVs (P001 sample kept, P002–P018 gitignored)
+│   ├── experiment_metadata.csv
+│   └── rename_results.py      # Utility to normalise result filenames
+│
+├── analysis/            # Analysis notebooks and outputs
+│   ├── analysis.ipynb         # Main analysis notebook
+│   └── figures/               # Generated plots (trajectory overlay, jitter comparison, etc.)
+│
+├── demos/               # Early prototypes (not part of main experiment)
+│   ├── mouse_demo/            # Phantom Omni two-user interaction demo
+│   └── opengl_movement/       # Three.js 3D navigation prototype
+│
+├── pyhaptics.py         # Core haptics library wrapper
+└── requirements.txt
+```
 
-**web_gui** provides a modern web-based interface for conducting haptic experiments, automatically analyzing results, and managing experiment data with comprehensive visualizations and reporting capabilities.
+## Quick Start
 
-## web_gui - Web Interface for Haptic Experiments
-
-**Purpose:** Streamlined workflow for conducting haptic guidance experiments with automatic data processing, visualization, and reporting.
-
-### Quick Start
+### Running an experiment
 
 ```bash
-# Install dependencies
-cd fyp
 pip install -r requirements.txt
-
-# Start the web server
 cd web_gui
 python3 run_server.py
 ```
 
-The web interface will automatically open at http://localhost:5000
+The web interface opens at http://localhost:5000. Enter a participant ID, configure haptic parameters, and start the experiment. Results and visualisations are available immediately after completion.
 
-### Features
+See [web_gui/README.md](web_gui/README.md) for full documentation.
 
-- 🚀 **Easy Launch**: Configure and start experiments with a user-friendly interface
-- 📊 **Automatic Analysis**: Results processed immediately after experiment completion
-- 📈 **Rich Visualizations**: 3D trajectory plots, jitter analysis, performance metrics
-- 📚 **History Management**: Track multiple experiments, filter by participant, compare results
-- 📄 **Export Reports**: Generate PDF reports and CSV data exports
-- 💾 **Persistent Storage**: SQLite database for experiment tracking and metrics
+### Running the experiment directly (no web GUI)
 
-### Workflow
+```bash
+python3 experiment/experiment_runner.py
+```
 
-1. **Launch Screen** → Enter participant ID and configure haptic parameters
-2. **Experiment Execution** → Complete the 3D polyline tracking task in Pygame window
-3. **Results Display** → View metrics, visualizations, and detailed statistics
-4. **History Dashboard** → Browse past experiments, compare performance, export data
+### Analysing results
 
-### Key Components
+Open [analysis/analysis.ipynb](analysis/analysis.ipynb) in Jupyter. The notebook reads from `data/results/` and produces the plots saved in `analysis/figures/`.
 
-- `app.py`: Flask web server with REST API endpoints
-- `database.py`: SQLite database for experiment storage
-- `analysis_pipeline.py`: Automated data processing with Butterworth filtering
-- `templates/`: HTML pages (launch, results, history)
-- `static/`: CSS and JavaScript for the web interface
+## Data
 
-For detailed documentation, see [web_gui/README.md](web_gui/README.md)
+Raw movement data CSVs are stored in `data/results/<participant_id>/`. Each file covers one session and captures:
 
-## mouse_demo usage
+| Column | Description |
+|---|---|
+| `time_s` | Elapsed time (seconds) |
+| `pos_x/y/z` | Haptic device tip position (world frame) |
+| `dist_to_target` | Distance to current waypoint |
+| `force_x/y/z` | Guidance force applied |
+| `collision_event` | Collision flag |
+| `click_event` | Waypoint click flag |
 
-**Purpose:** haptic guidance and interaction physics between two Phantom Omni users, with experiment logging and visualization.
+Session naming convention: `{participant}_{condition}_{phase}_{date}_{time}.csv`
 
-- **linedemo.py**: main interactive demo. Runs the haptic loop, applies guidance forces, and renders the target path for live interaction.
-- **sequence_tracker.py**: timed experiment runner. Logs distance/error metrics to JSON for analysis.
-- **visualization.py**: post-process plots. Generates charts from the JSON output (distance over time, trajectories, component plots).
+Only `P001` data is committed as a schema reference. All other participant data is gitignored due to size.
+
+Processed outputs (filtered signals, trajectory plots, jitter plots) live in `web_gui/analysis_output/<participant_id>/<session>/`.
+
+## Demos
+
+`demos/mouse_demo/` — an earlier prototype using the Phantom Omni with two simultaneous users. Contains its own experiment data and report plots.
+
+`demos/opengl_movement/` — a Three.js 3D environment used to prototype navigation mechanics before the Unity integration.

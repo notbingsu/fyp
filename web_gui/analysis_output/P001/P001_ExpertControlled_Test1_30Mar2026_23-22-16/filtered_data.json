@@ -1,0 +1,26 @@
+{
+  "metadata": {
+    "csv_path": "/Users/bingsu/Desktop/projects/cde4301/fyp/data_analysis/Results/P001/P001_ExpertControlled_Test1_30Mar2026_23-22-16.csv",
+    "reference_csv_path": "/Users/bingsu/Desktop/projects/cde4301/fyp/experimentation/waypoints/Test1.csv",
+    "filter_cutoff_hz": 6.0,
+    "filter_order": 4
+  },
+  "metrics": {
+    "jitter_rms": 0.0011699763528684429,
+    "jitter_mean": 0.0009038485620657998,
+    "jitter_std": 0.0007429013683679209,
+    "jitter_max": 0.003283233686983959,
+    "jitter_min": 9.061036029763821e-07,
+    "jitter_p2p": 0.0032823275833809827,
+    "lateral_error_rms": 0.051237090487860314,
+    "lateral_error_mean": 0.043317690777570264,
+    "lateral_error_std": 0.027364522786995395,
+    "lateral_error_max": 0.09980829598216749,
+    "lateral_error_min": 0.004624091665804566,
+    "path_efficiency": 90.7580071950289,
+    "ideal_path_length": 1.040654,
+    "actual_path_length": 1.146625,
+    "excess_path_length": 0.10597100000000004,
+    "total_duration": 6.7157
+  }
+}

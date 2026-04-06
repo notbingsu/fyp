@@ -1,9 +1,33 @@
+# Environment
 .env
 .venv
 .vscode
-Results/
-analysis_output
-node_modules
-.db
-data_analysis/
-.db
+node_modules/
+
+# Database files
+*.db
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Generated HTML exports
+analysis/analysis.html
+
+# ── Raw movement data (data/results/) ───────────────────────────────────────────
+# P001 is kept as a schema sample; all other participants are ignored
+data/results/P00[2-9]/
+data/results/P01[0-8]/
+# Within P001: skip calibration runs and extra training sessions
+data/results/P001/*Calibration*
+data/results/P001/*Training_30Mar2026_23-23-*
+data/results/P001/*Training_30Mar2026_23-24-*
+
+# ── Processed analysis output (web_gui/analysis_output/) ────────────────────────
+# P001/Test1_30Mar2026 session is kept as a schema sample; everything else ignored
+web_gui/analysis_output/P00[2-9]/
+web_gui/analysis_output/P01[0-8]/
+web_gui/analysis_output/P001/*Calibration*/
+web_gui/analysis_output/P001/*Test2*/
+web_gui/analysis_output/P001/*Training*/
+web_gui/analysis_output/P001/*2026-03-30*/
