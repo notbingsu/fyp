@@ -58,9 +58,9 @@ See [web_gui/README.md](web_gui/README.md) for full documentation.
 2. Run `Surgery Haptic Training.exe` inside the extracted folder
 3. Connect the Phantom Omni before launching — the game will detect it automatically
 
-Run data is written to two locations as the game progresses:
-- **`data/results/<participant_id>/`** — raw movement CSVs, one file per session
-- **`experiment/waypoints/`** — waypoint completion records for each trial
+Run data is written inside the extracted game folder:
+- **`waypoints/`** — raw movement CSVs, one file per session
+- **`experiment_data/`** — meta metrics per trial (completion time, errors, etc.)
 
 The web GUI (`web_gui/run_server.py`) can then be used to analyse and review the collected data.
 
